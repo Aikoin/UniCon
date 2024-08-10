@@ -19,8 +19,6 @@ from util import adjust_learning_rate, warmup_learning_rate
 from util import get_universum
 from util import set_optimizer, save_model
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
-
 def parse_option():
     parser = argparse.ArgumentParser('argument for training')
 
