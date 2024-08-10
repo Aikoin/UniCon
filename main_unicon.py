@@ -51,8 +51,8 @@ def parse_option():
     parser.add_argument('--size', type=int, default=32, help='parameter for RandomResizedCrop')
 
     # model dataset
-    parser.add_argument('--model', type=str, default='resnet18')
-    parser.add_argument('--dataset', type=str, default='cifar10',
+    parser.add_argument('--model', type=str, default='resnet50')
+    parser.add_argument('--dataset', type=str, default='cifar100',
                         choices=['cifar10', 'cifar100', 'tinyimagenet', 'imagenet'], help='dataset')
     parser.add_argument('--mean', type=str, help='mean of dataset in path in form of str tuple')
     parser.add_argument('--std', type=str, help='std of dataset in path in form of str tuple')
@@ -227,7 +227,7 @@ def set_model(opt):
             '''多卡保存，单卡加载'''
             new_state_dict = {}
             for k, v in state_dict.items():
-                k = k.replace("module.", "")
+                k = k.replace("module.", "").replace("encoder.", "").replace("downsample", "shortcut")
                 new_state_dict[k] = v
             state_dict = new_state_dict
         model = model.cuda()
