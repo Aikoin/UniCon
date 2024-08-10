@@ -76,4 +76,5 @@ def test(features, labels, classifier):
             y = torch.cat([y, label], dim=0)
             y_pred = torch.cat([y_pred, pred], dim=0)
     acc = accuracy(y_pred, y)
-    print('Top 1 Accuracy:', acc)
+    print('Top 1 Accuracy:', acc[0].item())
+    return acc

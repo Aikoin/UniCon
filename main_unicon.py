@@ -19,27 +19,26 @@ from util import adjust_learning_rate, warmup_learning_rate
 from util import get_universum
 from util import set_optimizer, save_model
 
+os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
 
 def parse_option():
     parser = argparse.ArgumentParser('argument for training')
 
     parser.add_argument('--print_freq', type=int, default=10,
                         help='print frequency')
-    parser.add_argument('--save_freq', type=int, default=50,
-                        help='save frequency')
     parser.add_argument('--batch_size', type=int, default=256,
                         help='batch_size')
-    parser.add_argument('--num_workers', type=int, default=12,
+    parser.add_argument('--num_workers', type=int, default=4,
                         help='num of workers to use')
-    parser.add_argument('--epochs', type=int, default=1000,
+    parser.add_argument('--epochs', type=int, default=200,
                         help='number of training epochs')
-    parser.add_argument('--test_freq', type=int, default=50,
+    parser.add_argument('--test_freq', type=int, default=10,
                         help='test frequency')
 
     # optimization
-    parser.add_argument('--learning_rate', type=float, default=0.05,
+    parser.add_argument('--learning_rate', type=float, default=0.2,
                         help='learning rate')
-    parser.add_argument('--lr_decay_epochs', type=str, default='700,800,900',
+    parser.add_argument('--lr_decay_epochs', type=str, default='140,160,180',
                         help='where to decay lr, can be a list')
     parser.add_argument('--lr_decay_rate', type=float, default=0.1,
                         help='decay rate for learning rate')
@@ -54,8 +53,8 @@ def parse_option():
     parser.add_argument('--size', type=int, default=32, help='parameter for RandomResizedCrop')
 
     # model dataset
-    parser.add_argument('--model', type=str, default='resnet50')
-    parser.add_argument('--dataset', type=str, default='cifar100',
+    parser.add_argument('--model', type=str, default='resnet18')
+    parser.add_argument('--dataset', type=str, default='cifar10',
                         choices=['cifar10', 'cifar100', 'tinyimagenet', 'imagenet'], help='dataset')
     parser.add_argument('--mean', type=str, help='mean of dataset in path in form of str tuple')
     parser.add_argument('--std', type=str, help='std of dataset in path in form of str tuple')
@@ -76,6 +75,9 @@ def parse_option():
                         help='warm-up for large batch training')
     parser.add_argument('--trial', type=str, default='0',
                         help='id for recording multiple runs')
+    
+    parser.add_argument('--ckpt', type=str, default='',
+                        help='path to pre-trained model')
 
     opt = parser.parse_args()
 
@@ -110,8 +112,8 @@ def parse_option():
         opt.warm = True
     if opt.warm:
         opt.model_name = '{}_warm'.format(opt.model_name)
-        opt.warmup_from = 0.01
-        opt.warm_epochs = 10
+        opt.warmup_from = 0.1
+        opt.warm_epochs = 2
         if opt.cosine:
             eta_min = opt.learning_rate * (opt.lr_decay_rate ** 3)
             opt.warmup_to = eta_min + (opt.learning_rate - eta_min) * (
@@ -202,16 +204,36 @@ def set_loader(opt):
 
 def set_model(opt):
     torch.cuda.empty_cache()
+
     model = ConResNet(name=opt.model)
+
     if opt.method == 'UniCon':
         criterion = UniConLoss(temperature=opt.temp)
     else:
         criterion = SupConLoss(temperature=opt.temp)
 
+    ckpt = torch.load(opt.ckpt, map_location='cpu')
+    state_dict = ckpt['model']
+
     if torch.cuda.is_available():
         if torch.cuda.device_count() > 1:
+            '''单卡保存，多卡加载'''
+            # new_state_dict = {}
+            # for k, v in state_dict.items():
+            #     if k.startswith('encoder.'):
+            #         k = k.replace('encoder.', 'encoder.module.')    
+            #     new_state_dict[k] = v
+            # state_dict = new_state_dict
             model.encoder = torch.nn.DataParallel(model.encoder)
+        else:
+            '''多卡保存，单卡加载'''
+            new_state_dict = {}
+            for k, v in state_dict.items():
+                k = k.replace("module.", "")
+                new_state_dict[k] = v
+            state_dict = new_state_dict
         model = model.cuda()
+        model.load_state_dict(state_dict, strict=True)
         criterion = criterion.cuda()
         cudnn.benchmark = True
 
@@ -300,6 +322,8 @@ def main():
 
     # build optimizer
     optimizer = set_optimizer(opt, model)
+
+    best_acc = 0
     
     # training routine
     for epoch in range(1, opt.epochs + 1):
@@ -311,22 +335,18 @@ def main():
         time2 = time.time()
         print('epoch {}, total time {:.2f}'.format(epoch, time2 - time1))
 
-        if epoch % opt.save_freq == 0:
-            save_file = os.path.join(
-                opt.save_folder, 'ckpt_epoch_{epoch}.pth'.format(epoch=epoch))
-            save_model(model, optimizer, opt, epoch, save_file)
-
         # test the model
         if epoch % opt.test_freq == 0:
             features, y = get_train_features(train_loader, model)
             classifier = set_classifier(features, y, opt)
             features, y = get_test_features(test_loader, model)
-            test(features, y, classifier)
+            acc = test(features, y, classifier)
+            if acc > best_acc:
+                best_acc = acc
+                save_file = os.path.join(opt.save_folder, 'ckpt_epoch_{epoch}.pth'.format(epoch=epoch))
+                save_model(model, optimizer, opt, epoch, save_file)
 
-    # save the last model
-    save_file = os.path.join(
-        opt.save_folder, 'last.pth')
-    save_model(model, optimizer, opt, opt.epochs, save_file)
+    print('best accuracy: {:.2f}'.format(best_acc))    
 
 
 if __name__ == '__main__':
