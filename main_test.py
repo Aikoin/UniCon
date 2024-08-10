@@ -17,6 +17,14 @@ def parse_option():
     parser.add_argument('--num_workers', type=int, default=4,
                         help='num of workers to use')
 
+    # optimization for classifier
+    parser.add_argument('--learning_rate', type=float, default=0.1,
+                        help='learning rate')
+    parser.add_argument('--weight_decay', type=float, default=1e-4,
+                        help='weight decay')
+    parser.add_argument('--momentum', type=float, default=0.9,
+                        help='momentum')
+
     # model dataset
     parser.add_argument('--model', type=str, default='resnet50')
     parser.add_argument('--dataset', type=str, default='cifar100',
