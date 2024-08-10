@@ -26,6 +26,8 @@ def parse_option():
     parser.add_argument('--data_folder', type=str, default=None, help='path to custom dataset')
 
     # other setting
+    parser.add_argument('--size', type=int, default=32, help='parameter for RandomResizedCrop')
+    
     parser.add_argument('--ckpt', type=str, default='',
                         help='path to pre-trained model')
 
