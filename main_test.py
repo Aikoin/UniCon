@@ -134,7 +134,7 @@ def set_model(opt):
             '''多卡保存，单卡加载'''
             new_state_dict = {}
             for k, v in state_dict.items():
-                k = k.replace("module.", "")
+                k = k.replace("module.", "").replace("downsample", "shortcut")
                 new_state_dict[k] = v
             state_dict = new_state_dict
         model = model.cuda()
