@@ -36,6 +36,8 @@ def parse_option():
 
     if opt.data_folder is None:
         opt.data_folder = './datasets/'
+    
+    return opt
 
 def set_loader(opt):
     # construct data loader
